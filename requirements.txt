@@ -12,3 +12,7 @@ chromadb
 fastapi
 uvicorn
 sse_starlette
+PyMuPDF
+python-multipart
+langchain-text-splitters
+transformers

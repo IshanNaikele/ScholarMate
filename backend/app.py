@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 import uuid # To generate unique filenames for uploaded files
 import sys
+from pydantic import BaseModel
 
 # --- Environment Variable Loading ---
 load_dotenv()
@@ -23,8 +24,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 # --- LangChain Chain Import ---
 # Assuming 'chain' is defined in pdf_summary_chain.py
-from chains.pdf_summary_chain import chain as pdf_summary_chain
-
+from backend.chains.pdf_summary_chain import chain as pdf_summary_chain_short
+from backend.chains.pdf_summary_chain import summarize_long_document
 # --- FastAPI Application Definition ---
 app = FastAPI(
     title="ScholarMate Backend API",
@@ -51,8 +52,8 @@ async def root():
 # --- LangServe Route Addition ---
 add_routes(
     app,
-    pdf_summary_chain,
-    path="/pdf-summary",
+    pdf_summary_chain_short, # This uses the 'chain' from pdf_summary_chain.py
+    path="/pdf-summary-short", # Renamed path for clarity
 )
 
 # --- New Endpoint for PDF Text Extraction ---
@@ -80,6 +81,24 @@ async def get_text_from_pdf(file: UploadFile = File(...)):
     finally:
         if os.path.exists(file_location):
             os.remove(file_location)
+
+class SummarizeRequest(BaseModel):
+    """Pydantic model for the request body of the summarization endpoint."""
+    text: str # This field will receive the full extracted text from the frontend
+
+@app.post("/summarize_document/")
+async def summarize_document_endpoint(request: SummarizeRequest):
+    """
+    Receives long text and returns a comprehensive summary using LangChain's map-reduce.
+    """
+    try:
+        # Call the long document summarization function
+        summary = summarize_long_document(request.text)
+        return {"summary": summary}
+    except Exception as e:
+        print(f"Error during long document summarization: {e}") # Log error on server side
+        raise HTTPException(status_code=500, detail=f"An error occurred during summarization: {str(e)}")
+
 
 # --- Uvicorn Entry Point (for local development) ---
 if __name__ == "__main__":
