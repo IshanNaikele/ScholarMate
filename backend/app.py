@@ -26,6 +26,9 @@ if PROJECT_ROOT not in sys.path:
 # Assuming 'chain' is defined in pdf_summary_chain.py
 from backend.chains.pdf_summary_chain import chain as pdf_summary_chain_short
 from backend.chains.pdf_summary_chain import summarize_long_document
+
+from backend.chains.glossary_chain import chain as glossary_chain_short
+from backend.chains.glossary_chain import get_glossary
 # --- FastAPI Application Definition ---
 app = FastAPI(
     title="ScholarMate Backend API",
@@ -99,8 +102,26 @@ async def summarize_document_endpoint(request: SummarizeRequest):
         print(f"Error during long document summarization: {e}") # Log error on server side
         raise HTTPException(status_code=500, detail=f"An error occurred during summarization: {str(e)}")
 
+# New: Pydantic model for the glossary request body
+class GlossaryRequest(BaseModel):
+    """Pydantic model for the request body of the glossary generation endpoint."""
+    text: str # This field will receive the full extracted text from the frontend
+
+# New: Endpoint for Glossary Generation
+@app.post("/generate_glossary/")
+async def generate_glossary_endpoint(request: GlossaryRequest):
+    """
+    Receives text and returns a technical glossary using LangChain's map-reduce.
+    """
+    try:
+        glossary = get_glossary(request.text)
+        return {"glossary": glossary}
+    except Exception as e:
+        print(f"Error during glossary generation: {e}") # Log error on server side
+        raise HTTPException(status_code=500, detail=f"An error occurred during glossary generation: {str(e)}")
+
 
 # --- Uvicorn Entry Point (for local development) ---
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("backend.app:app", host="127.0.0.1", port=8000, reload=True)

@@ -16,3 +16,4 @@ PyMuPDF
 python-multipart
 langchain-text-splitters
 transformers
+tiktoken
