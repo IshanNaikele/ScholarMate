@@ -30,6 +30,7 @@ from backend.chains.pdf_summary_chain import summarize_long_document
 # from backend.chains.glossary_chain import chain as glossary_chain_short
 from backend.chains.glossary_chain import get_glossary
 from backend.chains.qa_chain import get_qa_pairs
+from backend.chains.mcq_chain  import get_mcq_questions
 # --- FastAPI Application Definition ---
 app = FastAPI(
     title="ScholarMate Backend API",
@@ -144,6 +145,29 @@ async def generate_question_and_answer_endpoint(request: Q_ARequest):
         # Raise an HTTP exception with a 500 status code and a detailed error message
         raise HTTPException(status_code=500, detail=f"An error occurred during Q&A generation: {str(e)}")
 
+# Pydantic model for the MCQ request body (ALREADY PROVIDED BY YOU)
+class MCQ_Request(BaseModel):
+    """Pydantic model for the request body of the MCQ generation endpoint."""
+    text: str # This field will receive the full extracted text from the frontend
+
+
+# Endpoint for MCQ Generation (ADDED)
+@app.post("/generate_mcq/")
+async def generate_mcq_endpoint(request: MCQ_Request):
+    """
+    Receives text and returns generated Multiple Choice Questions (MCQs).
+    """
+    try:
+        # Call your MCQ generation function
+        mcq = get_mcq_questions(request.text)
+        
+        # Return the generated MCQs.
+        # The key 'mcqs' is used to be consistent with the data type.
+        return {"mcqs": mcq}
+    except Exception as e:
+        print(f"Error during MCQs generation: {e}") # Log error on server side
+        # Raise an HTTP exception with a 500 status code and a detailed error message
+        raise HTTPException(status_code=500, detail=f"An error occurred during MCQs generation: {str(e)}")
 # --- Uvicorn Entry Point (for local development) ---
 if __name__ == "__main__":
     import uvicorn
