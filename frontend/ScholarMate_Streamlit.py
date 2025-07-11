@@ -4,7 +4,7 @@ import streamlit as st
 import requests
 import os
 import sys
-import random # For shuffling MCQ options
+import random
 
 # --- CRUCIAL FIX for ModuleNotFoundError (Keep this) ---
 # Ensures the project root is in sys.path so internal modules can be imported
@@ -18,19 +18,88 @@ st.title("📚 ScholarMate - Where your Learning becomes easy")
 st.markdown("Upload a PDF to get an AI-powered summary and technical glossary.")
 
 # Define the URL of your FastAPI backend server
-BACKEND_URL = "http://127.0.0.1:8000" # Ensure this matches your FastAPI server's address
+BACKEND_URL = "http://127.0.0.1:8000"
 
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 
+# Constants
+LONG_DOC_THRESHOLD = 1000 # characters, a reasonable minimum for LLM to find patterns
+NUM_QUESTIONS_PER_TEST = 10 # Display 10 questions per test instance
+
+# --- Session State Initialization for all tabs ---
+# Keep track of the text for each tab to avoid re-generating unless PDF changes
+if 'last_extracted_text_summary' not in st.session_state:
+    st.session_state.last_extracted_text_summary = None
+if 'last_extracted_text_glossary' not in st.session_state:
+    st.session_state.last_extracted_text_glossary = None
+if 'last_extracted_text_qa' not in st.session_state:
+    st.session_state.last_extracted_text_qa = None
+if 'last_extracted_text_mcq' not in st.session_state:
+    st.session_state.last_extracted_text_mcq = None
+
+# For MCQ Test Specifics
+if 'all_mcq_questions' not in st.session_state:
+    st.session_state.all_mcq_questions = [] # All questions generated from the PDF
+if 'current_test_mcqs' not in st.session_state:
+    st.session_state.current_test_mcqs = [] # Subset of questions for the current test
+if 'user_answers' not in st.session_state:
+    st.session_state.user_answers = {} # User's answers for current_test_mcqs
+if 'test_submitted' not in st.session_state:
+    st.session_state.test_submitted = False
+if 'shuffled_options_map' not in st.session_state:
+    st.session_state.shuffled_options_map = {} # Store shuffled options per question index to keep consistent
+if 'test_instance_id' not in st.session_state:
+    st.session_state.test_instance_id = 0 # To force a fresh test if needed
+
+# Function to initialize/reset a new test instance
+def initialize_new_test_instance(all_questions, num_q_per_test):
+    st.session_state.test_instance_id += 1 # Increment to force new test UI state
+    st.session_state.test_submitted = False
+    st.session_state.user_answers = {}
+    st.session_state.shuffled_options_map = {}
+
+    if len(all_questions) > num_q_per_test:
+        # Select a random subset of questions
+        st.session_state.current_test_mcqs = random.sample(all_questions, num_q_per_test)
+    else:
+        # If fewer questions than NUM_QUESTIONS_PER_TEST, use all and shuffle
+        st.session_state.current_test_mcqs = list(all_questions) # Make a copy
+        random.shuffle(st.session_state.current_test_mcqs)
+
+    # Initialize user answers and shuffle options for the new test set
+    for i, mcq_item in enumerate(st.session_state.current_test_mcqs):
+        st.session_state.user_answers[i] = None # No default selected
+        options = mcq_item.get('options', [])
+        if options:
+            shuffled_opts = list(options) # Make a mutable copy
+            random.shuffle(shuffled_opts)
+            st.session_state.shuffled_options_map[i] = shuffled_opts
+        else:
+            st.session_state.shuffled_options_map[i] = []
+
+    st.rerun() # Rerun to display the new test instance
+
+# Function to reset and retake the current test with shuffled order
+def retest_current_instance():
+    st.session_state.test_submitted = False
+    st.session_state.user_answers = {} # Reset user answers
+    # Re-shuffle options for the *same* set of current_test_mcqs
+    for i, mcq_item in enumerate(st.session_state.current_test_mcqs):
+        options = mcq_item.get('options', [])
+        if options:
+            shuffled_opts = list(options)
+            random.shuffle(shuffled_opts)
+            st.session_state.shuffled_options_map[i] = shuffled_opts
+        else:
+            st.session_state.shuffled_options_map[i] = []
+    st.rerun()
+
+extracted_text = ""
 if uploaded_file is not None:
     st.info("File uploaded successfully! Sending to backend for text extraction...")
 
-    # Prepare the file for sending via requests.post (multipart/form-data)
     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
 
-    extracted_text = "" # Initialize extracted_text
-
-    # Use a placeholder for the spinner to update its text
     status_placeholder = st.empty()
     status_placeholder.info("Extracting text from PDF...")
 
@@ -48,154 +117,145 @@ if uploaded_file is not None:
     except Exception as e:
         status_placeholder.error(f"An unexpected error occurred during text extraction: {e}")
 
-    # Display extracted text if available
     if extracted_text:
         st.subheader("Extracted Text Preview:")
         st.text_area("Document Content", extracted_text[:1000], height=200, disabled=True,
                      help=f"Only showing the first 1000 characters. Total characters: {len(extracted_text)}")
 
-        LONG_DOC_THRESHOLD = 1000 # characters, a reasonable minimum for LLM to find patterns
-
-        # Initialize outputs (though largely handled by session_state now)
-        summary_output = ""
-        glossary_output = ""
-        qa_pairs_output = []
-        mcq_output = [] 
-
         if len(extracted_text) > LONG_DOC_THRESHOLD:
             st.info("Document content is substantial. Proceeding with AI analysis...")
 
-            # Create tabs for Summary, Glossary, Q&A, and MCQ
             tabs = st.tabs(["📄 Summary", "📘 Glossary", "❓ Q&A", "🧠 MCQ"])
 
             # --- Summarization Logic ---
-            # with tabs[0]: # Summary Tab
-            #     st.subheader("Topic-wise Summary")
-            #     # Initialize summary in session state to avoid re-generating on every rerun
-            #     if 'summary_text' not in st.session_state or st.session_state.get('last_extracted_text') != extracted_text:
-            #         summary_spinner = st.empty()
-            #         summary_spinner.info("Generating comprehensive summary...")
-            #         try:
-            #             summary_response = requests.post(
-            #                 f"{BACKEND_URL}/summarize_document/",
-            #                 json={"text": extracted_text}
-            #             )
-            #             if summary_response.status_code == 200:
-            #                 summary_data = summary_response.json()
-            #                 st.session_state.summary_text = summary_data.get("summary", "")
-            #                 st.session_state.last_extracted_text = extracted_text # Store text to prevent re-gen
-            #                 summary_spinner.empty() # Clear spinner on success
-            #                 if st.session_state.summary_text:
-            #                     st.markdown(st.session_state.summary_text)
-            #                 else:
-            #                     st.warning("No comprehensive summary could be generated.")
-            #             else:
-            #                 summary_spinner.error(f"Error generating summary: {summary_response.status_code} - {summary_response.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             summary_spinner.error(f"Could not connect to the backend server for summarization at {BACKEND_URL}.")
-            #         except Exception as e:
-            #             summary_spinner.error(f"An unexpected error occurred during summarization: {e}")
-            #     elif st.session_state.summary_text:
-            #         st.markdown(st.session_state.summary_text) # Display existing summary
-            #     else:
-            #         st.warning("No comprehensive summary could be generated yet.")
+            with tabs[0]: # Summary Tab
+                st.subheader("Topic-wise Summary")
+                if st.session_state.last_extracted_text_summary != extracted_text or 'summary_text' not in st.session_state:
+                    summary_spinner = st.empty()
+                    summary_spinner.info("Generating comprehensive summary...")
+                    try:
+                        summary_response = requests.post(f"{BACKEND_URL}/summarize_document/", json={"text": extracted_text})
+                        if summary_response.status_code == 200:
+                            summary_data = summary_response.json()
+                            st.session_state.summary_text = summary_data.get("summary", "")
+                            st.session_state.last_extracted_text_summary = extracted_text
+                            summary_spinner.empty()
+                            if st.session_state.summary_text:
+                                st.markdown(st.session_state.summary_text)
+                            else:
+                                st.warning("No comprehensive summary could be generated.")
+                        else:
+                            summary_spinner.error(f"Error generating summary: {summary_response.status_code} - {summary_response.text}")
+                    except requests.exceptions.ConnectionError:
+                        summary_spinner.error(f"Could not connect to the backend server for summarization at {BACKEND_URL}.")
+                    except Exception as e:
+                        summary_spinner.error(f"An unexpected error occurred during summarization: {e}")
+                elif st.session_state.summary_text:
+                    st.markdown(st.session_state.summary_text)
+                else:
+                    st.warning("No comprehensive summary could be generated yet.")
 
+            # --- Glossary Logic ---
+            with tabs[1]: # Glossary Tab
+                st.subheader("Technical Glossary (Glassador)")
+                
+                # Always define the placeholder for the spinner outside the generation logic
+                glossary_spinner_placeholder = st.empty()
 
-            # # --- Glossary Logic ---
-            # with tabs[1]: # Glossary Tab
-            #     st.subheader("Technical Glossary (Glassador)")
-            #     # Initialize glossary in session state
-            #     if 'glossary_terms' not in st.session_state or st.session_state.get('last_extracted_text_glossary') != extracted_text:
-            #         glossary_spinner = st.empty()
-            #         glossary_spinner.info("Generating technical glossary...")
-            #         try:
-            #             glossary_response = requests.post(
-            #                 f"{BACKEND_URL}/generate_glossary/",
-            #                 json={"text": extracted_text}
-            #             )
-            #             if glossary_response.status_code == 200:
-            #                 glossary_data = glossary_response.json()
-            #                 st.session_state.glossary_terms = glossary_data.get("glossary", []) 
-            #                 st.session_state.last_extracted_text_glossary = extracted_text
-            #                 glossary_spinner.empty() # Clear spinner on success
-            #                 if st.session_state.glossary_terms:
-            #                     for item in st.session_state.glossary_terms:
-            #                         if isinstance(item, dict) and "term" in item and "definition" in item:
-            #                             st.markdown(f"**{item['term']}**: {item['definition']}")
-            #                         elif isinstance(item, str):
-            #                             st.markdown(item)
-            #                     st.success(f"Generated {len(st.session_state.glossary_terms)} glossary terms!")
-            #                 else:
-            #                     st.warning("No glossary available.")
-            #             else:
-            #                 glossary_spinner.error(f"Error generating glossary: {glossary_response.status_code} - {glossary_response.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             glossary_spinner.error(f"Could not connect to the backend server for glossary generation at {BACKEND_URL}.")
-            #         except Exception as e:
-            #             glossary_spinner.error(f"An unexpected error occurred during glossary generation: {e}")
-            #     elif st.session_state.glossary_terms:
-            #         for item in st.session_state.glossary_terms:
-            #             if isinstance(item, dict) and "term" in item and "definition" in item:
-            #                 st.markdown(f"**{item['term']}**: {item['definition']}")
-            #             elif isinstance(item, str):
-            #                 st.markdown(item)
-            #     else:
-            #         st.warning("No glossary could be generated yet.")
+                # Condition to trigger glossary generation
+                # Generate if:
+                # 1. extracted_text has changed since last glossary generation (new PDF)
+                # 2. 'glossary_content_string' is not yet in session_state (first run/app restart)
+                # 3. 'glossary_content_string' is empty but a PDF was uploaded (previous gen failed or returned empty)
+                should_generate_glossary = (
+                    st.session_state.last_extracted_text_glossary != extracted_text or
+                    'glossary_content_string' not in st.session_state or
+                    (st.session_state.get('glossary_content_string') == "" and extracted_text)
+                )
+
+                if should_generate_glossary:
+                    glossary_spinner_placeholder.info("Generating technical glossary...")
+                    try:
+                        glossary_response = requests.post(f"{BACKEND_URL}/generate_glossary/", json={"text": extracted_text})
+                        
+                        if glossary_response.status_code == 200:
+                            glossary_data = glossary_response.json()
+                            # Expecting 'glossary' key to contain the markdown string
+                            generated_glossary_str = glossary_data.get("glossary", "") 
+                            
+                            # Store the string directly
+                            st.session_state.glossary_content_string = generated_glossary_str
+                            st.session_state.last_extracted_text_glossary = extracted_text
+                            glossary_spinner_placeholder.empty() # Clear spinner on success
+
+                            if st.session_state.glossary_content_string:
+                                st.success(f"Glossary generated successfully!")
+                                # Directly markdown the entire string
+                                st.markdown(st.session_state.glossary_content_string) 
+                            else:
+                                st.warning("No glossary could be generated for this document.")
+                        else:
+                            glossary_spinner_placeholder.error(f"Error generating glossary: {glossary_response.status_code} - {glossary_response.text}")
+                            st.session_state.glossary_content_string = "" # Clear on error
+                    except requests.exceptions.ConnectionError:
+                        glossary_spinner_placeholder.error(f"Could not connect to the backend server for glossary generation at {BACKEND_URL}.")
+                        st.session_state.glossary_content_string = "" # Clear on connection error
+                    except Exception as e:
+                        glossary_spinner_placeholder.error(f"An unexpected error occurred during glossary generation: {e}")
+                        st.session_state.glossary_content_string = "" # Clear on general error
+                
+                # This block displays the glossary if it's already in session_state
+                # and we didn't just try to re-generate it (or re-generation was successful)
+                elif st.session_state.get('glossary_content_string'): # Use .get for safety
+                    st.markdown(st.session_state.glossary_content_string)
+                else: # No glossary content available
+                    st.warning("No glossary could be generated yet. Please ensure the document contains technical terms.")
 
             # # --- Q&A Logic ---
-            # with tabs[2]: # Q&A Tab
-            #     st.subheader("Self-Testing Questions & Answers")
-            #     # Initialize Q&A in session state
-            #     if 'qa_pairs' not in st.session_state or st.session_state.get('last_extracted_text_qa') != extracted_text:
-            #         qa_spinner = st.empty()
-            #         qa_spinner.info("Generating Q&A pairs... This may take a moment.")
-            #         try:
-            #             qa_response = requests.post(
-            #                 f"{BACKEND_URL}/generate_question_and_answer/",
-            #                 json={"text": extracted_text}
-            #             )
-            #             if qa_response.status_code == 200:
-            #                 qa_data = qa_response.json()
-            #                 st.session_state.qa_pairs = qa_data.get("qa_pairs", [])
-            #                 st.session_state.last_extracted_text_qa = extracted_text
-            #                 qa_spinner.empty()
-            #                 if st.session_state.qa_pairs:
-            #                     st.success(f"Generated {len(st.session_state.qa_pairs)} Q&A pairs!")
-            #                     for i, qa in enumerate(st.session_state.qa_pairs):
-            #                         st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
-            #                         with st.expander(f"Show Answer for Question {i+1}"):
-            #                             st.write(qa.get('answer', 'N/A'))
-            #                         st.markdown("---")
-            #                 else:
-            #                     st.warning("No Q&A pairs could be generated for this document.")
-            #             else:
-            #                 qa_spinner.error(f"Error generating Q&A: {qa_response.status_code} - {qa_response.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             qa_spinner.error(f"Could not connect to the backend server for Q&A generation at {BACKEND_URL}. Please ensure your FastAPI backend is running.")
-            #         except Exception as e:
-            #             qa_spinner.error(f"An unexpected error occurred during Q&A generation: {e}")
-            #     elif st.session_state.qa_pairs:
-            #         for i, qa in enumerate(st.session_state.qa_pairs):
-            #             st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
-            #             with st.expander(f"Show Answer for Question {i+1}"):
-            #                 st.write(qa.get('answer', 'N/A'))
-            #             st.markdown("---")
-            #     else:
-            #         st.warning("No Q&A pairs could be generated yet.")
+            with tabs[2]: # Q&A Tab
+                st.subheader("Self-Testing Questions & Answers")
+                if st.session_state.last_extracted_text_qa != extracted_text or 'qa_pairs' not in st.session_state:
+                    qa_spinner = st.empty()
+                    qa_spinner.info("Generating Q&A pairs... This may take a moment.")
+                    try:
+                        qa_response = requests.post(f"{BACKEND_URL}/generate_question_and_answer/", json={"text": extracted_text})
+                        if qa_response.status_code == 200:
+                            qa_data = qa_response.json()
+                            st.session_state.qa_pairs = qa_data.get("qa_pairs", [])
+                            st.session_state.last_extracted_text_qa = extracted_text
+                            qa_spinner.empty()
+                            if st.session_state.qa_pairs:
+                                st.success(f"Generated {len(st.session_state.qa_pairs)} Q&A pairs!")
+                                for i, qa in enumerate(st.session_state.qa_pairs):
+                                    st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
+                                    with st.expander(f"Show Answer for Question {i+1}"):
+                                        st.write(qa.get('answer', 'N/A'))
+                                    st.markdown("---")
+                            else:
+                                st.warning("No Q&A pairs could be generated for this document.")
+                        else:
+                            qa_spinner.error(f"Error generating Q&A: {qa_response.status_code} - {qa_response.text}")
+                    except requests.exceptions.ConnectionError:
+                        qa_spinner.error(f"Could not connect to the backend server for Q&A generation at {BACKEND_URL}. Please ensure your FastAPI backend is running.")
+                    except Exception as e:
+                        qa_spinner.error(f"An unexpected error occurred during Q&A generation: {e}")
+                elif st.session_state.qa_pairs:
+                    for i, qa in enumerate(st.session_state.qa_pairs):
+                        st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
+                        with st.expander(f"Show Answer for Question {i+1}"):
+                            st.write(qa.get('answer', 'N/A'))
+                        st.markdown("---")
+                else:
+                    st.warning("No Q&A pairs could be generated yet.")
 
             # --- MCQ Logic (NEW SECTION for Test) ---
             with tabs[3]: # MCQ Tab
                 st.subheader("Multiple Choice Questions (MCQs) - Test Your Knowledge!")
 
-                # Initialize session state for MCQs and user answers
-                if 'mcq_questions' not in st.session_state or st.session_state.get('last_extracted_text_mcq') != extracted_text:
-                    st.session_state.mcq_questions = []
-                    st.session_state.user_answers = {}
-                    st.session_state.test_submitted = False
-                    st.session_state.last_extracted_text_mcq = extracted_text # Track text to avoid re-gen
-
+                # Condition to trigger initial MCQ generation from backend
+                if st.session_state.last_extracted_text_mcq != extracted_text or not st.session_state.all_mcq_questions:
                     mcq_spinner = st.empty()
-                    mcq_spinner.info("Generating MCQs... This may take a moment.")
+                    mcq_spinner.info("Generating ALL possible MCQs from document... This may take a moment.")
                     try:
                         mcq_response = requests.post(
                             f"{BACKEND_URL}/generate_mcq/",
@@ -203,21 +263,13 @@ if uploaded_file is not None:
                         )
                         if mcq_response.status_code == 200:
                             mcq_data = mcq_response.json()
-                            st.session_state.mcq_questions = mcq_data.get("mcqs", [])
-                            # Initialize user answers for each question
-                            st.session_state.user_answers = {i: None for i in range(len(st.session_state.mcq_questions))}
-                            
-                            # Shuffle options once and store them
-                            for i, mcq_item in enumerate(st.session_state.mcq_questions):
-                                options = mcq_item.get('options', [])
-                                if options:
-                                    st.session_state[f'shuffled_options_{i}'] = random.sample(options, len(options))
-                                else:
-                                    st.session_state[f'shuffled_options_{i}'] = []
-
+                            st.session_state.all_mcq_questions = mcq_data.get("mcqs", []) # Store ALL questions
+                            st.session_state.last_extracted_text_mcq = extracted_text # Mark as processed
                             mcq_spinner.empty()
-                            if st.session_state.mcq_questions:
-                                st.success(f"Generated {len(st.session_state.mcq_questions)} MCQs! Please answer the questions below.")
+                            if st.session_state.all_mcq_questions:
+                                st.success(f"Generated {len(st.session_state.all_mcq_questions)} total MCQs! Preparing your test...")
+                                # Automatically initialize the first test instance
+                                initialize_new_test_instance(st.session_state.all_mcq_questions, NUM_QUESTIONS_PER_TEST)
                             else:
                                 st.warning("No MCQs could be generated for this document.")
                         else:
@@ -226,72 +278,83 @@ if uploaded_file is not None:
                         mcq_spinner.error(f"Could not connect to the backend server for MCQ generation at {BACKEND_URL}.")
                     except Exception as e:
                         mcq_spinner.error(f"An unexpected error occurred during MCQ generation: {e}")
-
-                # Display MCQs and collect answers if questions exist
-                if st.session_state.mcq_questions:
-                    for i, mcq_item in enumerate(st.session_state.mcq_questions):
-                        st.markdown(f"**Question {i+1}:** {mcq_item.get('question', 'N/A')}")
-                        
-                        shuffled_options = st.session_state.get(f'shuffled_options_{i}', [])
-                        
-                        # Use on_change to immediately update the user's answer in session state
-                        def update_answer(index, selected_value):
-                            st.session_state.user_answers[index] = selected_value
-
-                        selected_option = st.radio(
-                            f"Select your answer for Q{i+1}:",
-                            shuffled_options,
-                            index=shuffled_options.index(st.session_state.user_answers.get(i)) if st.session_state.user_answers.get(i) in shuffled_options else 0, # Keep previous selection if exists, else default 0
-                            key=f"mcq_q_{i}",
-                            on_change=update_answer,
-                            args=(i, st.session_state.user_answers.get(i)), # Pass current value to on_change
-                        )
-                        # Ensure the latest selected option is always stored, especially if on_change doesn't fire immediately
-                        st.session_state.user_answers[i] = selected_option
-                        
-                        st.markdown("---")
-
-                    # Submit Button for the entire test
-                    if not st.session_state.test_submitted:
-                        if st.button("Submit Test for Scoring", key="submit_mcq_test"):
-                            st.session_state.test_submitted = True
-                            st.rerun() # Rerun to display results
-                    else: # If test is already submitted, show results
-                        total_questions = len(st.session_state.mcq_questions)
-                        correct_count = 0
-                        
-                        st.subheader("Test Results:")
-                        for i, mcq_item in enumerate(st.session_state.mcq_questions):
-                            user_ans = st.session_state.user_answers.get(i)
-                            correct_ans = mcq_item.get('correct_answer', 'N/A')
-
-                            st.markdown(f"**Question {i+1}:** {mcq_item.get('question', 'N/A')}")
-                            st.write(f"Your Answer: **{user_ans if user_ans is not None else 'No Answer'}**")
-                            st.write(f"Correct Answer: **{correct_ans}**")
+                
+                # If we have any MCQs (either newly generated or from session_state)
+                if st.session_state.all_mcq_questions:
+                    if not st.session_state.current_test_mcqs and not st.session_state.test_submitted:
+                        # This handles the case where all_mcq_questions exist, but current_test_mcqs need to be picked
+                        initialize_new_test_instance(st.session_state.all_mcq_questions, NUM_QUESTIONS_PER_TEST)
+                    
+                    if st.session_state.current_test_mcqs:
+                        if not st.session_state.test_submitted:
+                            st.info(f"Answer the {len(st.session_state.current_test_mcqs)} questions below.")
                             
-                            # Case-insensitive comparison for robustness
-                            if str(user_ans).strip().lower() == str(correct_ans).strip().lower():
-                                st.success("🎉 Correct!")
-                                correct_count += 1
-                            else:
-                                st.error("❌ Incorrect!")
-                            st.markdown("---")
+                            # Display current test questions
+                            for i, mcq_item in enumerate(st.session_state.current_test_mcqs):
+                                st.markdown(f"**Question {i+1}:** {mcq_item.get('question', 'N/A')}")
+                                
+                                # Retrieve pre-shuffled options for consistency
+                                shuffled_options = st.session_state.shuffled_options_map.get(i, [])
+
+                                # Find current selected index, default to None (no selection) if not found
+                                current_selection_index = None
+                                if st.session_state.user_answers.get(i) in shuffled_options:
+                                    current_selection_index = shuffled_options.index(st.session_state.user_answers.get(i))
+                                
+                                selected_option = st.radio(
+                                    f"Select your answer for Q{i+1} (Test ID: {st.session_state.test_instance_id}):", # Added test ID for debugging
+                                    shuffled_options,
+                                    index=current_selection_index, # None means no initial selection
+                                    key=f"mcq_q_{st.session_state.test_instance_id}_{i}" # Unique key per test instance and question
+                                )
+                                
+                                # Store the user's selected answer
+                                st.session_state.user_answers[i] = selected_option
+                                st.markdown("---")
+
+                            # Submit Button for the entire test
+                            if st.button("Submit Test for Scoring", key="submit_mcq_test"):
+                                st.session_state.test_submitted = True
+                                st.rerun() # Rerun to display results
                         
-                        st.subheader(f"Final Score: {correct_count} out of {total_questions}")
-                        if total_questions > 0:
-                            st.progress(correct_count / total_questions)
-                        
-                        if st.button("Retake Test / Generate New MCQs", key="retake_mcq_test"):
-                            del st.session_state.mcq_questions
-                            del st.session_state.user_answers
-                            del st.session_state.test_submitted
-                            del st.session_state.last_extracted_text_mcq
-                            # Clear shuffled options from session state too
-                            for i in range(total_questions):
-                                if f'shuffled_options_{i}' in st.session_state:
-                                    del st.session_state[f'shuffled_options_{i}']
-                            st.rerun() # Force rerun to re-initialize or re-generate
-                else:
+                        else: # Test is submitted, display results
+                            total_questions = len(st.session_state.current_test_mcqs)
+                            correct_count = 0
+                            
+                            st.subheader("Test Results:")
+                            for i, mcq_item in enumerate(st.session_state.current_test_mcqs):
+                                user_ans = st.session_state.user_answers.get(i)
+                                correct_ans = mcq_item.get('correct_answer', 'N/A')
+
+                                st.markdown(f"**Question {i+1}:** {mcq_item.get('question', 'N/A')}")
+                                st.write(f"Your Answer: **{user_ans if user_ans is not None else 'No Answer Selected'}**")
+                                st.write(f"Correct Answer: **{correct_ans}**")
+                                
+                                if str(user_ans).strip().lower() == str(correct_ans).strip().lower():
+                                    st.success("🎉 Correct!")
+                                    correct_count += 1
+                                else:
+                                    st.error("❌ Incorrect!")
+                                st.markdown("---")
+                            
+                            st.subheader(f"Final Score: {correct_count} out of {total_questions}")
+                            if total_questions > 0:
+                                st.progress(correct_count / total_questions)
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("Retake This Test (Shuffle Order)", key="retest_current"):
+                                    retest_current_instance() # Re-shuffles current questions/options
+                            with col2:
+                                if st.button("Take New Test (Different Questions)", key="new_test"):
+                                    initialize_new_test_instance(st.session_state.all_mcq_questions, NUM_QUESTIONS_PER_TEST)
+
+                    else: # No current_test_mcqs selected yet, but all_mcq_questions exist
+                        st.warning("No questions are currently loaded for the test. Click below to start.")
+                        if st.button(f"Start New Test ({NUM_QUESTIONS_PER_TEST} Questions)", key="start_initial_test"):
+                            initialize_new_test_instance(st.session_state.all_mcq_questions, NUM_QUESTIONS_PER_TEST)
+
+                else: # No all_mcq_questions available
                     st.info("Upload a PDF with substantial content to generate MCQs.")
         else:
             st.warning("The document is too short to generate a meaningful summary, glossary, Q&A, or MCQs.")
