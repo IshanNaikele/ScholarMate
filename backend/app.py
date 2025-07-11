@@ -27,8 +27,9 @@ if PROJECT_ROOT not in sys.path:
 from backend.chains.pdf_summary_chain import chain as pdf_summary_chain_short
 from backend.chains.pdf_summary_chain import summarize_long_document
 
-from backend.chains.glossary_chain import chain as glossary_chain_short
+# from backend.chains.glossary_chain import chain as glossary_chain_short
 from backend.chains.glossary_chain import get_glossary
+from backend.chains.qa_chain import get_qa_pairs
 # --- FastAPI Application Definition ---
 app = FastAPI(
     title="ScholarMate Backend API",
@@ -119,7 +120,29 @@ async def generate_glossary_endpoint(request: GlossaryRequest):
     except Exception as e:
         print(f"Error during glossary generation: {e}") # Log error on server side
         raise HTTPException(status_code=500, detail=f"An error occurred during glossary generation: {str(e)}")
+    
+# Pydantic model for the Q&A request body
+class Q_ARequest(BaseModel):
+    """Pydantic model for the request body of the Q&A generation endpoint."""
+    text: str # This field will receive the full extracted text from the frontend
 
+# Endpoint for Question & Answer Generation
+@app.post("/generate_question_and_answer/")
+async def generate_question_and_answer_endpoint(request: Q_ARequest):
+    """
+    Receives text and returns generated Question-Answer pairs.
+    """
+    try:
+        # Call your Q&A generation function
+        question_and_answer = get_qa_pairs(request.text)
+        
+        # Return the generated Q&A pairs.
+        # Make sure the key matches what your frontend expects (e.g., 'qa_pairs').
+        return {"qa_pairs": question_and_answer}
+    except Exception as e:
+        print(f"Error during Q&A generation: {e}") # Log error on server side
+        # Raise an HTTP exception with a 500 status code and a detailed error message
+        raise HTTPException(status_code=500, detail=f"An error occurred during Q&A generation: {str(e)}")
 
 # --- Uvicorn Entry Point (for local development) ---
 if __name__ == "__main__":

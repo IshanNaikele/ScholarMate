@@ -57,15 +57,18 @@ if uploaded_file is not None:
 
         summary_output = ""
         glossary_output = ""
+        qa_pairs_output = [] # Initialize for Q&A output
 
         if len(extracted_text) > LONG_DOC_THRESHOLD:
             st.info("Document content is substantial. Proceeding with AI analysis...")
 
-            # Create tabs first, then populate them
-            tabs = st.tabs(["📄 Summary", "📘 Glossary"])
+            # Create tabs for Summary, Glossary, and Q&A
+            tabs = st.tabs(["📄 Summary", "📘 Glossary", "❓ Q&A"])
 
             # --- Summarization Logic ---
-            with tabs[0]: # Ensure spinner and content are within the Summary tab
+            with tabs[0]: # Summary Tab
+                st.subheader("Topic-wise Summary")
+                # Removed the button to auto-generate on tab load for better UX
                 summary_spinner = st.empty()
                 summary_spinner.info("Generating comprehensive summary...")
                 try:
@@ -77,7 +80,6 @@ if uploaded_file is not None:
                         summary_data = summary_response.json()
                         summary_output = summary_data.get("summary", "")
                         summary_spinner.empty() # Clear spinner on success
-                        st.subheader("Topic-wise Summary")
                         if summary_output:
                             st.markdown(summary_output)
                         else:
@@ -90,7 +92,9 @@ if uploaded_file is not None:
                     summary_spinner.error(f"An unexpected error occurred during summarization: {e}")
 
             # --- Glossary Logic ---
-            with tabs[1]: # Ensure spinner and content are within the Glossary tab
+            with tabs[1]: # Glossary Tab
+                st.subheader("Technical Glossary (Glassador)")
+                # Removed the button to auto-generate on tab load for better UX
                 glossary_spinner = st.empty()
                 glossary_spinner.info("Generating technical glossary...")
                 try:
@@ -102,7 +106,6 @@ if uploaded_file is not None:
                         glossary_data = glossary_response.json()
                         glossary_output = glossary_data.get("glossary", "")
                         glossary_spinner.empty() # Clear spinner on success
-                        st.subheader("Technical Glossary (Glassador)")
                         if glossary_output:
                             st.markdown(glossary_output)
                         else:
@@ -114,8 +117,41 @@ if uploaded_file is not None:
                 except Exception as e:
                     glossary_spinner.error(f"An unexpected error occurred during glossary generation: {e}")
 
+            # --- Q&A Logic ---
+            with tabs[2]: # Q&A Tab
+                st.subheader("Self-Testing Questions & Answers")
+                if st.button("Generate Q&A Pairs", key="generate_qa_button"):
+                    qa_spinner = st.empty()
+                    qa_spinner.info("Generating Q&A pairs... This may take a moment.")
+                    try:
+                        qa_response = requests.post(
+                            f"{BACKEND_URL}/generate_question_and_answer/", # The new endpoint
+                            json={"text": extracted_text}
+                        )
+                        if qa_response.status_code == 200:
+                            qa_data = qa_response.json()
+                            qa_pairs_output = qa_data.get("qa_pairs", []) # Expecting a list of dicts
+                            qa_spinner.empty() # Clear spinner on success
+
+                            if qa_pairs_output:
+                                st.success(f"Generated {len(qa_pairs_output)} Q&A pairs!")
+                                for i, qa in enumerate(qa_pairs_output):
+                                    st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
+                                    # Use st.expander to hide/show the answer
+                                    with st.expander(f"Show Answer for Question {i+1}"):
+                                        st.write(qa.get('answer', 'N/A'))
+                                    st.markdown("---") # Visual separator
+                            else:
+                                st.warning("No Q&A pairs could be generated for this document.")
+                        else:
+                            qa_spinner.error(f"Error generating Q&A: {qa_response.status_code} - {qa_response.text}")
+                    except requests.exceptions.ConnectionError:
+                        qa_spinner.error(f"Could not connect to the backend server for Q&A generation at {BACKEND_URL}. Please ensure your FastAPI backend is running.")
+                    except Exception as e:
+                        qa_spinner.error(f"An unexpected error occurred during Q&A generation: {e}")
+
         else:
-            st.warning("The document is too short to generate a meaningful summary and glossary.")
+            st.warning("The document is too short to generate a meaningful summary, glossary, or Q&A.")
             st.info("Please upload a PDF with more substantial content (at least 1000 characters) for best results.")
 
     else:
@@ -124,8 +160,8 @@ if uploaded_file is not None:
 st.sidebar.header("About ScholarMate")
 st.sidebar.info(
     "ScholarMate helps you quickly grasp the essence of academic papers "
-    "and technical documents by providing concise summaries and a "
-    "technical glossary of key terms, powered by AI."
+    "and technical documents by providing concise summaries, a "
+    "technical glossary, and self-testing Q&A sets, all powered by AI."
 )
 st.sidebar.markdown("---")
 st.sidebar.caption("Developed with Streamlit, FastAPI, LangChain, and Groq.")
