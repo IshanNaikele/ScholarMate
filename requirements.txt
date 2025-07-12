@@ -17,3 +17,5 @@ python-multipart
 langchain-text-splitters
 transformers
 tiktoken
+youtube-transcript-api
+yt-dlp
