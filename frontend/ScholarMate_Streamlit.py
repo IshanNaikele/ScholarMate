@@ -127,126 +127,126 @@ if uploaded_file is not None:
 
             tabs = st.tabs(["📄 Summary", "📘 Glossary", "❓ Q&A", "🧠 MCQ"])
 
-            # # --- Summarization Logic ---
-            # with tabs[0]: # Summary Tab
-            #     st.subheader("Topic-wise Summary")
-            #     if st.session_state.last_extracted_text_summary != extracted_text or 'summary_text' not in st.session_state:
-            #         summary_spinner = st.empty()
-            #         summary_spinner.info("Generating comprehensive summary...")
-            #         try:
-            #             summary_response = requests.post(f"{BACKEND_URL}/summarize_document/", json={"text": extracted_text})
-            #             if summary_response.status_code == 200:
-            #                 summary_data = summary_response.json()
-            #                 st.session_state.summary_text = summary_data.get("summary", "")
-            #                 st.session_state.last_extracted_text_summary = extracted_text
-            #                 summary_spinner.empty()
-            #                 if st.session_state.summary_text:
-            #                     st.markdown(st.session_state.summary_text)
-            #                 else:
-            #                     st.warning("No comprehensive summary could be generated.")
-            #             else:
-            #                 summary_spinner.error(f"Error generating summary: {summary_response.status_code} - {summary_response.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             summary_spinner.error(f"Could not connect to the backend server for summarization at {BACKEND_URL}.")
-            #         except Exception as e:
-            #             summary_spinner.error(f"An unexpected error occurred during summarization: {e}")
-            #     elif st.session_state.summary_text:
-            #         st.markdown(st.session_state.summary_text)
-            #     else:
-            #         st.warning("No comprehensive summary could be generated yet.")
+            # --- Summarization Logic ---
+            with tabs[0]: # Summary Tab
+                st.subheader("Topic-wise Summary")
+                if st.session_state.last_extracted_text_summary != extracted_text or 'summary_text' not in st.session_state:
+                    summary_spinner = st.empty()
+                    summary_spinner.info("Generating comprehensive summary...")
+                    try:
+                        summary_response = requests.post(f"{BACKEND_URL}/summarize_document/", json={"text": extracted_text})
+                        if summary_response.status_code == 200:
+                            summary_data = summary_response.json()
+                            st.session_state.summary_text = summary_data.get("summary", "")
+                            st.session_state.last_extracted_text_summary = extracted_text
+                            summary_spinner.empty()
+                            if st.session_state.summary_text:
+                                st.markdown(st.session_state.summary_text)
+                            else:
+                                st.warning("No comprehensive summary could be generated.")
+                        else:
+                            summary_spinner.error(f"Error generating summary: {summary_response.status_code} - {summary_response.text}")
+                    except requests.exceptions.ConnectionError:
+                        summary_spinner.error(f"Could not connect to the backend server for summarization at {BACKEND_URL}.")
+                    except Exception as e:
+                        summary_spinner.error(f"An unexpected error occurred during summarization: {e}")
+                elif st.session_state.summary_text:
+                    st.markdown(st.session_state.summary_text)
+                else:
+                    st.warning("No comprehensive summary could be generated yet.")
 
-            # # --- Glossary Logic ---
-            # with tabs[1]: # Glossary Tab
-            #     st.subheader("Technical Glossary (Glassador)")
+            # --- Glossary Logic ---
+            with tabs[1]: # Glossary Tab
+                st.subheader("Technical Glossary (Glassador)")
                 
-            #     # Always define the placeholder for the spinner outside the generation logic
-            #     glossary_spinner_placeholder = st.empty()
+                # Always define the placeholder for the spinner outside the generation logic
+                glossary_spinner_placeholder = st.empty()
 
-            #     # Condition to trigger glossary generation
-            #     # Generate if:
-            #     # 1. extracted_text has changed since last glossary generation (new PDF)
-            #     # 2. 'glossary_content_string' is not yet in session_state (first run/app restart)
-            #     # 3. 'glossary_content_string' is empty but a PDF was uploaded (previous gen failed or returned empty)
-            #     should_generate_glossary = (
-            #         st.session_state.last_extracted_text_glossary != extracted_text or
-            #         'glossary_content_string' not in st.session_state or
-            #         (st.session_state.get('glossary_content_string') == "" and extracted_text)
-            #     )
+                # Condition to trigger glossary generation
+                # Generate if:
+                # 1. extracted_text has changed since last glossary generation (new PDF)
+                # 2. 'glossary_content_string' is not yet in session_state (first run/app restart)
+                # 3. 'glossary_content_string' is empty but a PDF was uploaded (previous gen failed or returned empty)
+                should_generate_glossary = (
+                    st.session_state.last_extracted_text_glossary != extracted_text or
+                    'glossary_content_string' not in st.session_state or
+                    (st.session_state.get('glossary_content_string') == "" and extracted_text)
+                )
 
-            #     if should_generate_glossary:
-            #         glossary_spinner_placeholder.info("Generating technical glossary...")
-            #         try:
-            #             glossary_response = requests.post(f"{BACKEND_URL}/generate_glossary/", json={"text": extracted_text})
+                if should_generate_glossary:
+                    glossary_spinner_placeholder.info("Generating technical glossary...")
+                    try:
+                        glossary_response = requests.post(f"{BACKEND_URL}/generate_glossary/", json={"text": extracted_text})
                         
-            #             if glossary_response.status_code == 200:
-            #                 glossary_data = glossary_response.json()
-            #                 # Expecting 'glossary' key to contain the markdown string
-            #                 generated_glossary_str = glossary_data.get("glossary", "") 
+                        if glossary_response.status_code == 200:
+                            glossary_data = glossary_response.json()
+                            # Expecting 'glossary' key to contain the markdown string
+                            generated_glossary_str = glossary_data.get("glossary", "") 
                             
-            #                 # Store the string directly
-            #                 st.session_state.glossary_content_string = generated_glossary_str
-            #                 st.session_state.last_extracted_text_glossary = extracted_text
-            #                 glossary_spinner_placeholder.empty() # Clear spinner on success
+                            # Store the string directly
+                            st.session_state.glossary_content_string = generated_glossary_str
+                            st.session_state.last_extracted_text_glossary = extracted_text
+                            glossary_spinner_placeholder.empty() # Clear spinner on success
 
-            #                 if st.session_state.glossary_content_string:
-            #                     st.success(f"Glossary generated successfully!")
-            #                     # Directly markdown the entire string
-            #                     st.markdown(st.session_state.glossary_content_string) 
-            #                 else:
-            #                     st.warning("No glossary could be generated for this document.")
-            #             else:
-            #                 glossary_spinner_placeholder.error(f"Error generating glossary: {glossary_response.status_code} - {glossary_response.text}")
-            #                 st.session_state.glossary_content_string = "" # Clear on error
-            #         except requests.exceptions.ConnectionError:
-            #             glossary_spinner_placeholder.error(f"Could not connect to the backend server for glossary generation at {BACKEND_URL}.")
-            #             st.session_state.glossary_content_string = "" # Clear on connection error
-            #         except Exception as e:
-            #             glossary_spinner_placeholder.error(f"An unexpected error occurred during glossary generation: {e}")
-            #             st.session_state.glossary_content_string = "" # Clear on general error
+                            if st.session_state.glossary_content_string:
+                                st.success(f"Glossary generated successfully!")
+                                # Directly markdown the entire string
+                                st.markdown(st.session_state.glossary_content_string) 
+                            else:
+                                st.warning("No glossary could be generated for this document.")
+                        else:
+                            glossary_spinner_placeholder.error(f"Error generating glossary: {glossary_response.status_code} - {glossary_response.text}")
+                            st.session_state.glossary_content_string = "" # Clear on error
+                    except requests.exceptions.ConnectionError:
+                        glossary_spinner_placeholder.error(f"Could not connect to the backend server for glossary generation at {BACKEND_URL}.")
+                        st.session_state.glossary_content_string = "" # Clear on connection error
+                    except Exception as e:
+                        glossary_spinner_placeholder.error(f"An unexpected error occurred during glossary generation: {e}")
+                        st.session_state.glossary_content_string = "" # Clear on general error
                 
-            #     # This block displays the glossary if it's already in session_state
-            #     # and we didn't just try to re-generate it (or re-generation was successful)
-            #     elif st.session_state.get('glossary_content_string'): # Use .get for safety
-            #         st.markdown(st.session_state.glossary_content_string)
-            #     else: # No glossary content available
-            #         st.warning("No glossary could be generated yet. Please ensure the document contains technical terms.")
+                # This block displays the glossary if it's already in session_state
+                # and we didn't just try to re-generate it (or re-generation was successful)
+                elif st.session_state.get('glossary_content_string'): # Use .get for safety
+                    st.markdown(st.session_state.glossary_content_string)
+                else: # No glossary content available
+                    st.warning("No glossary could be generated yet. Please ensure the document contains technical terms.")
 
-            # # # --- Q&A Logic ---
-            # with tabs[2]: # Q&A Tab
-            #     st.subheader("Self-Testing Questions & Answers")
-            #     if st.session_state.last_extracted_text_qa != extracted_text or 'qa_pairs' not in st.session_state:
-            #         qa_spinner = st.empty()
-            #         qa_spinner.info("Generating Q&A pairs... This may take a moment.")
-            #         try:
-            #             qa_response = requests.post(f"{BACKEND_URL}/generate_question_and_answer/", json={"text": extracted_text})
-            #             if qa_response.status_code == 200:
-            #                 qa_data = qa_response.json()
-            #                 st.session_state.qa_pairs = qa_data.get("qa_pairs", [])
-            #                 st.session_state.last_extracted_text_qa = extracted_text
-            #                 qa_spinner.empty()
-            #                 if st.session_state.qa_pairs:
-            #                     st.success(f"Generated {len(st.session_state.qa_pairs)} Q&A pairs!")
-            #                     for i, qa in enumerate(st.session_state.qa_pairs):
-            #                         st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
-            #                         with st.expander(f"Show Answer for Question {i+1}"):
-            #                             st.write(qa.get('answer', 'N/A'))
-            #                         st.markdown("---")
-            #                 else:
-            #                     st.warning("No Q&A pairs could be generated for this document.")
-            #             else:
-            #                 qa_spinner.error(f"Error generating Q&A: {qa_response.status_code} - {qa_response.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             qa_spinner.error(f"Could not connect to the backend server for Q&A generation at {BACKEND_URL}. Please ensure your FastAPI backend is running.")
-            #         except Exception as e:
-            #             qa_spinner.error(f"An unexpected error occurred during Q&A generation: {e}")
-            #     elif st.session_state.qa_pairs:
-            #         for i, qa in enumerate(st.session_state.qa_pairs):
-            #             st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
-            #             with st.expander(f"Show Answer for Question {i+1}"):
-            #                 st.write(qa.get('answer', 'N/A'))
-            #             st.markdown("---")
-            #     else:
-            #         st.warning("No Q&A pairs could be generated yet.")
+            # # --- Q&A Logic ---
+            with tabs[2]: # Q&A Tab
+                st.subheader("Self-Testing Questions & Answers")
+                if st.session_state.last_extracted_text_qa != extracted_text or 'qa_pairs' not in st.session_state:
+                    qa_spinner = st.empty()
+                    qa_spinner.info("Generating Q&A pairs... This may take a moment.")
+                    try:
+                        qa_response = requests.post(f"{BACKEND_URL}/generate_question_and_answer/", json={"text": extracted_text})
+                        if qa_response.status_code == 200:
+                            qa_data = qa_response.json()
+                            st.session_state.qa_pairs = qa_data.get("qa_pairs", [])
+                            st.session_state.last_extracted_text_qa = extracted_text
+                            qa_spinner.empty()
+                            if st.session_state.qa_pairs:
+                                st.success(f"Generated {len(st.session_state.qa_pairs)} Q&A pairs!")
+                                for i, qa in enumerate(st.session_state.qa_pairs):
+                                    st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
+                                    with st.expander(f"Show Answer for Question {i+1}"):
+                                        st.write(qa.get('answer', 'N/A'))
+                                    st.markdown("---")
+                            else:
+                                st.warning("No Q&A pairs could be generated for this document.")
+                        else:
+                            qa_spinner.error(f"Error generating Q&A: {qa_response.status_code} - {qa_response.text}")
+                    except requests.exceptions.ConnectionError:
+                        qa_spinner.error(f"Could not connect to the backend server for Q&A generation at {BACKEND_URL}. Please ensure your FastAPI backend is running.")
+                    except Exception as e:
+                        qa_spinner.error(f"An unexpected error occurred during Q&A generation: {e}")
+                elif st.session_state.qa_pairs:
+                    for i, qa in enumerate(st.session_state.qa_pairs):
+                        st.markdown(f"**Question {i+1}:** {qa.get('question', 'N/A')}")
+                        with st.expander(f"Show Answer for Question {i+1}"):
+                            st.write(qa.get('answer', 'N/A'))
+                        st.markdown("---")
+                else:
+                    st.warning("No Q&A pairs could be generated yet.")
 
             # --- MCQ Logic (NEW SECTION for Test) ---
             with tabs[3]: # MCQ Tab
