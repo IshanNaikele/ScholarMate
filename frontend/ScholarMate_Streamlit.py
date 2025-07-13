@@ -1,3 +1,4 @@
+
 # frontend/ScholarMate_Streamlit.py
 
 import streamlit as st
@@ -15,15 +16,20 @@ if project_root not in sys.path:
 
 st.set_page_config(page_title="ScholarMate: AI Learning Assistant", layout="wide")
 st.title("📚 ScholarMate - Where your Learning becomes easy")
-st.markdown("Upload a PDF or provide a YouTube URL to get AI-powered insights.")
+# Updated markdown to include the new text input option
+st.markdown("Upload a PDF, provide a YouTube URL, or paste text directly to get AI-powered insights.")
 
 # Backend URL
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# Inputs
+# --- Inputs ---
+# Added a new text_area for direct user input
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
+youtube_url_input = st.text_input("Or enter a YouTube video URL", placeholder="e.g., https://www.youtube.com/watch?v=EjavYOFOJJo")
+st.markdown("<h5 style='text-align: center; color: grey;'>OR</h5>", unsafe_allow_html=True)
+text_input = st.text_area("Paste your text here", placeholder="You can paste any text content here to get started.", height=150)
 st.markdown("---")
-youtube_url_input = st.text_input("Or enter a YouTube video URL", placeholder="e.g., https://www.youtube.com/watch?v=EjavYOFOJJo") # Corrected example URL format
+
 
 # Session state setup
 def init_session():
@@ -32,7 +38,7 @@ def init_session():
         st.session_state.last_processed_content_hash = None
     if 'full_text' not in st.session_state: # This will store the actual content
         st.session_state.full_text = ""
-    if 'content_source' not in st.session_state: # To track if it's PDF or YouTube
+    if 'content_source' not in st.session_state: # To track if it's PDF, YouTube, or Text
         st.session_state.content_source = None
 
     # Tab-specific content caches
@@ -109,12 +115,17 @@ def retest_current_instance():
 # --- Content Fetching Logic ---
 # Determine the current input hash based on the active input field
 current_input_hash = None
+# Added a condition to check the new text_input field
 if uploaded_file is not None:
     # For PDF, hash the file content for robust change detection
     current_input_hash = hashlib.md5(uploaded_file.getvalue()).hexdigest()
 elif youtube_url_input:
     # For YouTube, hash the URL string
     current_input_hash = hashlib.md5(youtube_url_input.encode('utf-8')).hexdigest()
+elif text_input:
+    # For direct text input, hash the text content
+    current_input_hash = hashlib.md5(text_input.encode('utf-8')).hexdigest()
+
 
 # Check if content input has changed
 if current_input_hash != st.session_state.last_processed_content_hash:
@@ -188,7 +199,13 @@ if current_input_hash != st.session_state.last_processed_content_hash:
             status_placeholder.error(f"An unexpected error occurred during YouTube transcript fetching: {e}")
             st.session_state.full_text = ""
             st.session_state.content_source = None
-    # No need for st.rerun() here, let the script continue to display content
+    
+    # Added a new block to handle the direct text input
+    elif text_input:
+        st.info("Text input detected. Processing content...")
+        st.session_state.full_text = text_input
+        st.session_state.content_source = 'text' # Set the source to 'text'
+        st.success("Text content loaded successfully!")
 
 # Use the full_text from session state for display and further processing
 full_text = st.session_state.full_text
@@ -196,9 +213,10 @@ content_source = st.session_state.content_source
 
 # --- Display Content and Tabs (Only if full_text is available) ---
 if full_text and content_source:
-    st.subheader(f"Extracted Content Preview ({'PDF' if content_source == 'pdf' else 'YouTube'}):")
+    # Updated subheader to dynamically show the content source
+    st.subheader(f"Extracted Content Preview ({content_source.upper()}):")
     st.text_area("Content", full_text[:1000], height=200, disabled=True,
-                    help=f"Only showing the first 1000 characters. Total characters: {len(full_text)}")
+                 help=f"Only showing the first 1000 characters. Total characters: {len(full_text)}")
 
     if len(full_text) > LONG_DOC_THRESHOLD:
         st.info("Content is substantial. Proceeding with AI analysis...")
@@ -409,15 +427,15 @@ if full_text and content_source:
                         initialize_new_test_instance(st.session_state.all_mcq_questions, NUM_QUESTIONS_PER_TEST)
 
             else:
-                st.info("Upload a PDF or provide a YouTube URL with substantial content to generate MCQs.")
+                st.info("Upload a PDF, provide a YouTube URL, or paste text with substantial content to generate MCQs.")
     else:
         st.warning("The content is too short to generate a meaningful summary, glossary, Q&A, or MCQs.")
         st.info("Please provide content with more substantial text (at least 1000 characters) for best results.")
 
-elif (uploaded_file is not None or youtube_url_input) and not full_text:
+elif (uploaded_file is not None or youtube_url_input or text_input) and not full_text:
     st.error("Failed to process the provided content. Please check the error messages above for details.")
 else:
-    st.info("Upload a PDF file OR provide a YouTube URL above to begin.")
+    st.info("Upload a PDF file, provide a YouTube URL, or paste text in the box above to begin.")
 
 st.sidebar.header("About ScholarMate")
 st.sidebar.info(
