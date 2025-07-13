@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 from typing import Optional
 from pydub import AudioSegment
 import math
+import sys
+
+# Set the default encoding for stdout to UTF-8
+sys.stdout.reconfigure(encoding='utf-8')
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -96,7 +100,7 @@ def split_audio_into_chunks(audio_file_path: str, max_size_mb: int = 25) -> list
         print(f"Error splitting audio: {e}")
         return []
 
-def transcribe_audio_with_groq(audio_file_path: str, language: Optional[str] = None) -> Optional[str]:
+def transcribe_audio_with_groq(audio_file_path: str ) -> Optional[str]:
     client = Groq(api_key=os.environ.get("GROQ_API_KEY_NEW"))
 
     if not os.path.exists(audio_file_path):
@@ -109,8 +113,7 @@ def transcribe_audio_with_groq(audio_file_path: str, language: Optional[str] = N
                 "model": "whisper-large-v3",
                 "response_format": "text"
             }
-            if language:
-                transcription_params["language"] = language
+             
 
             transcription = client.audio.transcriptions.create(**transcription_params)
             return transcription  # fixed: already string
@@ -118,7 +121,7 @@ def transcribe_audio_with_groq(audio_file_path: str, language: Optional[str] = N
         print(f"Error transcribing chunk {audio_file_path}: {e}")
         return None
 
-def get_youtube_transcript(youtube_url: str, language: Optional[str] = None) -> str:
+def get_youtube_transcript(youtube_url: str ) -> str:
     full_transcript_parts = []
     downloaded_audio_path = None
     chunk_files = []
@@ -134,7 +137,7 @@ def get_youtube_transcript(youtube_url: str, language: Optional[str] = None) -> 
             return "Failed to split audio into manageable chunks."
 
         for chunk_file in chunk_files:
-            transcript_part = transcribe_audio_with_groq(chunk_file, language)
+            transcript_part = transcribe_audio_with_groq(chunk_file )
             if transcript_part:
                 full_transcript_parts.append(transcript_part)
             else:
@@ -164,12 +167,10 @@ if __name__ == "__main__":
     print("\U0001F517 Enter a YouTube video or playlist URL:")
     user_input_url = input("> ").strip()
 
-    print("\n\U0001F310 Enter language code (e.g., en for English, hi for Hindi) or press Enter to auto-detect:")
-    user_input_lang = input("> ").strip() or None
-
+     
     if not os.environ.get("GROQ_API_KEY_NEW"):
         print("\u274C Error: GROQ_API_KEY_NEW not set. Please check your .env file.")
     else:
-        result = get_youtube_transcript(user_input_url, language=user_input_lang)
+        result = get_youtube_transcript(user_input_url )
         print("\n\U0001F4DC Transcript:\n")
         print(result)
