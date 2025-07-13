@@ -31,6 +31,7 @@ from backend.chains.pdf_summary_chain import summarize_long_document
 from backend.chains.glossary_chain import get_glossary
 from backend.chains.qa_chain import get_qa_pairs
 from backend.chains.mcq_chain  import get_mcq_questions
+from backend.utils.youtube_transcript import get_youtube_transcript as fetch_youtube_transcript_util
 # --- FastAPI Application Definition ---
 app = FastAPI(
     title="ScholarMate Backend API",
@@ -86,6 +87,47 @@ async def get_text_from_pdf(file: UploadFile = File(...)):
     finally:
         if os.path.exists(file_location):
             os.remove(file_location)
+
+
+class YouTubeURLInput(BaseModel):
+    youtube_url: str
+
+# --- New Endpoint for Youtube Transcript Extraction ---
+YOUTUBE_ERROR_MESSAGES = [
+    "Failed to extract audio or video is unavailable. Please check the URL.",
+    "Failed to split audio into manageable chunks.",
+    "Could not generate transcript from any audio chunks.",
+    "An unexpected error occurred during processing: " # Prefix for general exceptions
+]
+
+@app.post("/get_youtube_transcript/")
+async def get_youtube_transcript_endpoint(input: YouTubeURLInput):
+    print(f"DEBUG (app.py): Received request for YouTube URL: {input.youtube_url}")
+    
+    # Call the utility function from youtube_transcript.py
+    transcript_result = fetch_youtube_transcript_util(input.youtube_url)
+    
+    print(f"DEBUG (app.py): Transcript utility returned: '{transcript_result[:100]}'...") # Print first 100 chars
+    
+    # Check if the returned string is one of the known error messages
+    is_error_message = False
+    for error_msg_prefix in YOUTUBE_ERROR_MESSAGES:
+        if transcript_result.startswith(error_msg_prefix):
+            is_error_message = True
+            break
+            
+    if is_error_message:
+        print(f"ERROR (app.py): Detected error message from utility: {transcript_result}")
+        # Return a 400 Bad Request if the utility indicates a failure
+        raise HTTPException(status_code=400, detail=transcript_result)
+    
+    if not transcript_result: # Also handle cases where it might be an empty string unexpectedly
+        print("ERROR (app.py): Transcript result is empty string.")
+        raise HTTPException(status_code=404, detail="Could not retrieve transcript for the given URL (empty result).")
+
+    print("DEBUG (app.py): Returning valid transcript to frontend.")
+    return {"transcript": transcript_result}
+    
 
 class SummarizeRequest(BaseModel):
     """Pydantic model for the request body of the summarization endpoint."""
