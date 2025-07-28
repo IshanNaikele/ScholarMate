@@ -5,11 +5,19 @@ python-dotenv
 PyMuPDF
 yt-dlp
 youtube-transcript-api
+pydub
+ffmpeg-python
+
+# LangChain & LLM integrations
 langchain
 langchain-core
 langchain-community
-langchain-groq # or langchain-google-genai etc.
-groq # or google-generativeai etc.
+langserve
 pydantic
-langserve 
-pydub 
+
+# LLM Providers (pick only what you use)
+groq
+# google-generativeai
+
+# Optional: for structured JSON parsing
+orjson
