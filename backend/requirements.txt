@@ -14,7 +14,7 @@ langchain-core
 langchain-community
 langserve
 pydantic
-
+langchain-groq
 # LLM Providers (pick only what you use)
 groq
 # google-generativeai
