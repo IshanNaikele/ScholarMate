@@ -1,4 +1,8 @@
 # backend/app.py
+
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware 
+
 from fastapi import FastAPI, UploadFile, File, HTTPException # Added UploadFile, File, HTTPException
 from langserve import add_routes
 from dotenv import load_dotenv
@@ -6,6 +10,30 @@ import os
 import uuid # To generate unique filenames for uploaded files
 import sys
 from pydantic import BaseModel
+
+# --- FastAPI Application Definition ---
+app = FastAPI(
+    title="ScholarMate Backend API",
+    version="1.0",
+    description="API for ScholarMate application, powered by LangChain and LangServe.",
+)
+
+origins = [
+    "http://localhost",
+    "http://localhost:8000", # For local backend testing
+    "http://localhost:8501", # For local Streamlit frontend
+    "https://*.streamlit.app", # Wildcard for all Streamlit Cloud subdomains (initial deployment)
+    # Once your Streamlit app is deployed, get its exact URL (e.g., https://yourusername-scholarmate.streamlit.app)
+    # and consider replacing the wildcard with the exact URL for stricter security.
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # Allows all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"], # Allows all headers
+)
 
 # --- Environment Variable Loading ---
 load_dotenv()
@@ -32,12 +60,7 @@ from backend.chains.glossary_chain import get_glossary
 from backend.chains.qa_chain import get_qa_pairs
 from backend.chains.mcq_chain  import get_mcq_questions
 from backend.utils.youtube_transcript import get_youtube_transcript as fetch_youtube_transcript_util
-# --- FastAPI Application Definition ---
-app = FastAPI(
-    title="ScholarMate Backend API",
-    version="1.0",
-    description="API for ScholarMate application, powered by LangChain and LangServe.",
-)
+ 
 
 # --- Define Project Root and Data Directory ---
 # This ensures files are saved in the 'data' folder at the project's root,

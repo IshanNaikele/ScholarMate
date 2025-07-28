@@ -14,7 +14,7 @@ import re
 load_dotenv()
 
 # Retrieve GROQ API key and ensure it's available
-groq_api_key = os.getenv("GROQ_API_KEY")
+groq_api_key = os.getenv("GROQ_API_KEY_QA")
 if not groq_api_key:
     raise ValueError("GROQ_API_KEY not found in environment variables. Please set it in your .env file.")
 

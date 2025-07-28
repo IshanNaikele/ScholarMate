@@ -19,8 +19,11 @@ st.title("📚 ScholarMate - Where your Learning becomes easy")
 # Updated markdown to include the new text input option
 st.markdown("Upload a PDF, provide a YouTube URL, or paste text directly to get AI-powered insights.")
 
+from dotenv import load_dotenv # <<< Make sure this is imported
+load_dotenv()
+
 # Backend URL
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.00.1:8000") 
 
 # --- Inputs ---
 # Added a new text_area for direct user input

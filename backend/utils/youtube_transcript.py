@@ -123,7 +123,7 @@ def transcribe_audio_with_groq(audio_file_path: str ) -> Optional[str]:
 
 def get_youtube_transcript(youtube_url: str ) -> str:
     full_transcript_parts = []
-    downloaded_audio_path = None
+    downloaded_audio_path =None
     chunk_files = []
 
     try:

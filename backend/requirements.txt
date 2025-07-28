@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+requests
+python-dotenv
+PyMuPDF
+yt-dlp
+youtube-transcript-api
+langchain
+langchain-core
+langchain-community
+langchain-groq # or langchain-google-genai etc.
+groq # or google-generativeai etc.
+pydantic
