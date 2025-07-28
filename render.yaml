@@ -2,22 +2,19 @@ services:
   - type: web
     name: scholarmate-backend
     env: python
+    pythonVersion: 3.11         # ✅ Move here
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     plan: free
-
-    build:
-      pythonVersion: 3.11
-      systemPackages:
-        - ffmpeg
-
+    systemPackages:            # ✅ Move here
+      - ffmpeg
     envVars:
       - key: GROQ_API_KEY
-         # Optional placeholder; safer to set in Render UI
+        sync: false
       - key: GROQ_API_KEY_NEW
-         
+        sync: false
       - key: GROQ_API_KEY_MCQ
-         
+        sync: false
       - key: GROQ_API_KEY_QA
-        
+        sync: false
