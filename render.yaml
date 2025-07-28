@@ -1,0 +1,24 @@
+# render.yaml
+services:
+  - type: web
+    name: scholarmate-backend # This MUST match your service name on Render
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # It's generally best to manage sensitive API keys directly in Render UI
+      # but if you want to define non-sensitive env vars here, you can.
+      # Example:
+      # - key: MY_NON_SENSITIVE_VAR
+      #   value: "some_value"
+      - key: GROQ_API_KEY # This should be set in Render UI, but keeping it here as a placeholder for structure
+        sync: false # Set this if you manage value in Render UI
+      - key: GROQ_API_KEY_NEW # Example for multiple keys
+        sync: false
+      - key: GROQ_API_KEY_MCQ # Example for multiple keys
+        sync: false
+      - key: GROQ_API_KEY_QA # Example for multiple keys
+        sync: false
+    systemPackages: # THIS IS THE CRUCIAL PART FOR FFMPEG
+      - ffmpeg
