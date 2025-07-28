@@ -11,3 +11,4 @@ langchain-community
 langchain-groq # or langchain-google-genai etc.
 groq # or google-generativeai etc.
 pydantic
+langserve 
