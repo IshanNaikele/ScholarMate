@@ -1,14 +1,22 @@
 services:
   - type: web
-    name: scholarmate-backend
+    name: scholarmate_backend
     env: python
-    pythonVersion: 3.11
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     plan: free
-    systemPackages:
-      - ffmpeg
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install --force-reinstall pydub==0.25.1
+      pip install -r requirements.txt
+
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+
+    build:
+      pythonVersion: 3.11
+      systemPackages:
+        - ffmpeg
+
     envVars:
       - key: GROQ_API_KEY
         sync: false
